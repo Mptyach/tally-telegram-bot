@@ -29,42 +29,52 @@ function getField(fields, label) {
   const field = fields.find(
     (f) => f.label && f.label.toLowerCase().includes(normalized)
   );
-  if (!field) return "\u2014";
+  if (!field) return "—";
 
   if (Array.isArray(field.value)) {
-    return field.value.length > 0 ? field.value.join(", ") : "\u2014";
+    if (field.value.length === 0) return "—";
+    var resolved = field.value.map(function(v) {
+      if (isUUID(String(v)) && Array.isArray(field.options)) {
+        var opt = field.options.find(function(o) { return o.id === v; });
+        return opt ? opt.text : v;
+      }
+      return v;
+    });
+    return resolved.join(", ");
   }
 
-  const val = field.value;
+  var val = field.value;
 
   if (val && isUUID(String(val))) {
-    const selected = fields.filter((f) => {
+    if (Array.isArray(field.options)) {
+      var opt = field.options.find(function(o) { return o.id === val; });
+      if (opt) return opt.text;
+    }
+    var selected = fields.filter(function(f) {
       if (!f.label) return false;
-      const lbl = f.label.toLowerCase();
-      return lbl.includes(normalized) && (f.value === true || f.value === "true");
+      return f.label.toLowerCase().includes(normalized) && (f.value === true || f.value === "true");
     });
-
     if (selected.length > 0) {
-      const options = selected.map((f) => {
-        const match = f.label.match(/\(([^)]+)\)\s*$/);
-        return match ? match[1].trim() : f.label;
+      var options = selected.map(function(f) {
+        var m = f.label.match(/\(([^)]+)\)\s*$/);
+        return m ? m[1].trim() : f.label;
       });
       return options.join(", ");
     }
-    return "\u2014";
+    return "—";
   }
 
-  return val || "\u2014";
+  return val || "—";
 }
 
 function formatMessage(source, fields) {
-  const name = getField(fields, "Ваше Имя");
-  const telegram = getField(fields, "Ваш Telegram");
-  const instagram = getField(fields, "Ваш Instagram");
-  const role = getField(fields, "Кто вы");
-  const request = getField(fields, "Ваш запрос по созданию контента");
-  const experience = getField(fields, "Опишите ваш опыт");
-  const readiness = getField(fields, "Хотели бы стать частью");
+  var name = getField(fields, "Ваше Имя");
+  var telegram = getField(fields, "Ваш Telegram");
+  var instagram = getField(fields, "Ваш Instagram");
+  var role = getField(fields, "Кто вы");
+  var request = getField(fields, "Ваш запрос по созданию контента");
+  var experience = getField(fields, "Опишите ваш опыт");
+  var readiness = getField(fields, "Хотели бы стать частью");
 
   return [
     "📌 " + source,
@@ -88,15 +98,15 @@ function formatMessage(source, fields) {
 }
 
 function sendTelegram(text) {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify({
+  return new Promise(function(resolve, reject) {
+    var payload = JSON.stringify({
       chat_id: TELEGRAM_CHAT_ID,
-      text,
+      text: text,
     });
 
-    const options = {
+    var options = {
       hostname: "api.telegram.org",
-      path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      path: "/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage",
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -104,14 +114,14 @@ function sendTelegram(text) {
       },
     };
 
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
+    var req = https.request(options, function(res) {
+      var data = "";
+      res.on("data", function(chunk) { data += chunk; });
+      res.on("end", function() {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(JSON.parse(data));
         } else {
-          reject(new Error(`Telegram API error ${res.statusCode}: ${data}`));
+          reject(new Error("Telegram API error " + res.statusCode + ": " + data));
         }
       });
     });
@@ -122,35 +132,34 @@ function sendTelegram(text) {
   });
 }
 
-app.get("/", (_req, res) => {
+app.get("/", function(_req, res) {
   res.json({ status: "ok", service: "tally-telegram-bot" });
 });
 
-app.post("/webhook/tally", async (req, res) => {
-  console.log("\n\u2550".repeat(1) + "\u2550".repeat(39));
-  console.log("📩 Incoming webhook:", new Date().toISOString());
+app.post("/webhook/tally", async function(req, res) {
+  console.log("Incoming webhook:", new Date().toISOString());
   console.log("Full payload:", JSON.stringify(req.body, null, 2));
 
   try {
-    const { data } = req.body;
+    var data = req.body.data;
 
     if (!data) {
       console.warn("No data field in payload");
       return res.status(400).json({ error: "Missing data field" });
     }
 
-    const formId = data.formId;
-    const fields = data.fields || [];
+    var formId = data.formId;
+    var fields = data.fields || [];
 
     console.log("Form ID: " + formId);
     console.log("Fields count: " + fields.length);
 
-    fields.forEach((f, i) => {
-      console.log("  [" + i + "] label=\"" + f.label + "\" value=\"" + f.value + "\"");
+    fields.forEach(function(f, i) {
+      console.log("  [" + i + "] label=" + f.label + " type=" + f.type + " value=" + JSON.stringify(f.value) + " options=" + JSON.stringify(f.options));
     });
 
-    const source = getSource(formId);
-    const message = formatMessage(source, fields);
+    var source = getSource(formId);
+    var message = formatMessage(source, fields);
 
     console.log("Sending to Telegram...");
     await sendTelegram(message);
@@ -163,10 +172,10 @@ app.post("/webhook/tally", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, function() {
   console.log("Server running on port " + PORT);
   console.log("TALLY_FORM_ID_ACTUAL = " + (TALLY_FORM_ID_ACTUAL || "NOT SET"));
-  console.log("TALLY_FORM_ID_OLD    = " + (TALLY_FORM_ID_OLD || "NOT SET"));
-  console.log("TELEGRAM_CHAT_ID     = " + (TELEGRAM_CHAT_ID || "NOT SET"));
-  console.log("TELEGRAM_BOT_TOKEN   = " + (TELEGRAM_BOT_TOKEN ? "set" : "NOT SET"));
+  console.log("TALLY_FORM_ID_OLD = " + (TALLY_FORM_ID_OLD || "NOT SET"));
+  console.log("TELEGRAM_CHAT_ID = " + (TELEGRAM_CHAT_ID || "NOT SET"));
+  console.log("TELEGRAM_BOT_TOKEN = " + (TELEGRAM_BOT_TOKEN ? "set" : "NOT SET"));
 });
