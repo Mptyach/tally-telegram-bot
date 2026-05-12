@@ -5,6 +5,8 @@ const {
   TALLY_FORM_ID_OLD,
 } = process.env;
 
+const STALE_THRESHOLD_MS = 10 * 60 * 1000;
+
 function getSource(formId) {
   if (formId === TALLY_FORM_ID_ACTUAL) return "Актуальная анкета";
   if (formId === TALLY_FORM_ID_OLD) return "Старая анкета";
@@ -64,6 +66,7 @@ function getField(fields, label) {
 
   return val || "—";
 }
+
 function formatMessage(source, fields) {
   const name = getField(fields, "Ваше Имя");
   const telegram = getField(fields, "Ваш Telegram");
@@ -126,6 +129,20 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "Missing data field" });
     }
 
+    const createdAt = body.createdAt || data.createdAt;
+    if (createdAt) {
+      const ageMs = Date.now() - new Date(createdAt).getTime();
+      if (ageMs > STALE_THRESHOLD_MS) {
+        console.log(
+          "Skipping stale submission. createdAt=" +
+            createdAt +
+            " ageMs=" +
+            ageMs
+        );
+        return res.status(200).json({ ok: true, skipped: "stale", ageMs });
+      }
+    }
+
     const formId = data.formId;
     const fields = data.fields || [];
 
@@ -143,4 +160,3 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 };
-
